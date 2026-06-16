@@ -120,12 +120,19 @@ class FinalVerdict:
     rationale: str
     module_reports: list[AgentReport] = field(default_factory=list)
     order_proposal: OrderProposal | None = None
+    # Plain-language call + concrete sizing for the user.
+    action_line: str = ""
+    suggested_quantity: int = 0
+    suggested_amount: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "weighted_score": round(self.weighted_score, 2),
             "verdict": self.verdict.value,
+            "action_line": self.action_line,
+            "suggested_quantity": self.suggested_quantity,
+            "suggested_amount": round(self.suggested_amount, 2),
             "confidence_score": round(self.confidence_score, 2),
             "conviction_score": round(self.conviction_score, 2),
             "thesis": self.thesis,

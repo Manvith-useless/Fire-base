@@ -41,6 +41,8 @@ def _print_verdict(v: FinalVerdict) -> None:
     print(f"Weighted score    : {v.weighted_score:.1f}/100")
     print(f"Confidence        : {v.confidence_score:.1f}/100")
     print(f"Conviction        : {v.conviction_score:.1f}/100")
+    if v.action_line:
+        print(f"\n>>> ACTION        : {v.action_line}")
     print(f"\nMarket environment: {v.market_environment}")
     print(f"Thesis            : {v.thesis}")
     print(f"\nBull case : {v.bull_case}")

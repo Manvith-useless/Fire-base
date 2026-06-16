@@ -108,9 +108,78 @@ class CIO:
             module_reports=reports,
         )
 
+        # Plain-language action call + concrete size for the user.
+        line, qty, amount = self._suggest_action(ctx, verdict, weighted)
+        verdict_obj.action_line = line
+        verdict_obj.suggested_quantity = qty
+        verdict_obj.suggested_amount = amount
+
         # Optional LLM polish of the narrative (never changes the numbers).
         self._maybe_enrich(verdict_obj, llm)
         return verdict_obj
+
+    # ---- actionable call + position sizing ----------------------------------
+    # Cap on how much of available cash to commit to a single new position.
+    MAX_POSITION_FRACTION = 0.20
+
+    def _suggest_action(
+        self, ctx: AnalysisContext, verdict: Recommendation, weighted: float
+    ) -> tuple[str, int, float]:
+        price = ctx.ltp or ctx.technical.get("close") or 0.0
+        cash = ctx.available_cash
+        held = ctx.held_quantity()
+        max_affordable = int(cash // price) if price else 0
+
+        if verdict == Recommendation.BUY:
+            # Scale exposure with score strength, capped.
+            strength = max(0.0, min(1.0, (weighted - 50) / 40))  # 50->0, 90->1
+            frac = self.MAX_POSITION_FRACTION * (0.5 + 0.5 * strength)
+            qty = int((cash * frac) // price) if price else 0
+            verb = "You should BUY" if weighted >= 85 else "You can BUY"
+            if qty >= 1:
+                amt = qty * price
+                pct = amt / cash * 100 if cash else 0
+                return (
+                    f"✅ {verb} — ~{qty} share(s) (≈₹{amt:,.0f}, "
+                    f"{pct:.0f}% of your ₹{cash:,.0f} cash) at ₹{price:,.2f}.",
+                    qty, amt,
+                )
+            if max_affordable >= 1:
+                amt = max_affordable * price
+                return (
+                    f"✅ {verb} signal, but your ₹{cash:,.0f} cash only affords "
+                    f"{max_affordable} share(s) (≈₹{amt:,.0f}) at ₹{price:,.2f} "
+                    f"— a tiny position; consider adding funds.",
+                    max_affordable, amt,
+                )
+            return (
+                f"✅ {verb} signal, but ₹{cash:,.0f} cash can't buy even 1 share at "
+                f"₹{price:,.2f}. Add funds to act.",
+                0, 0.0,
+            )
+
+        if verdict == Recommendation.SELL:
+            if held >= 1:
+                return (
+                    f"\U0001f53b You should SELL — exit your {held} share(s) "
+                    f"(≈₹{held * price:,.0f}).",
+                    held, held * price,
+                )
+            return ("\U0001f53b SELL signal — you hold none, so nothing to sell; "
+                    "do not buy here.", 0, 0.0)
+
+        if verdict == Recommendation.AVOID:
+            return ("⛔ AVOID — do not buy at current levels.", 0, 0.0)
+
+        if verdict == Recommendation.NO_ACTION:
+            return ("⏸ NO ACTION — evidence insufficient; stay in cash.", 0, 0.0)
+
+        # HOLD
+        if held >= 1:
+            return (f"⏸ HOLD — keep your {held} share(s); add no new money now.",
+                    0, 0.0)
+        return ("⏸ HOLD — not a fresh buy right now; wait for a better setup.",
+                0, 0.0)
 
     # ---- narrative builders (deterministic fallbacks) -----------------------
     def _scenarios(self, ctx: AnalysisContext) -> tuple[str, str, str]:
