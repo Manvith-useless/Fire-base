@@ -18,9 +18,15 @@ from orion.execution import OrderRejected, build_order_proposal, execute_proposa
 from orion.schemas import FinalVerdict, score_label
 
 
-def _get_provider(name: str, settings):
+def _get_provider(name: str, settings, snapshot_file: str | None = None):
     if name == "sample":
         return SampleDataProvider()
+    if name == "snapshot":
+        if not snapshot_file:
+            raise SystemExit("--snapshot-file is required for --provider snapshot")
+        from orion.data.snapshot_provider import SnapshotDataProvider
+
+        return SnapshotDataProvider(snapshot_file)
     if name == "kite":
         from orion.data.kite_client import KiteClient
 
@@ -63,7 +69,7 @@ def _print_verdict(v: FinalVerdict) -> None:
 
 def cmd_analyze(args) -> int:
     settings = load_settings()
-    provider = _get_provider(args.provider, settings)
+    provider = _get_provider(args.provider, settings, getattr(args, "snapshot_file", None))
     instrument = Instrument(symbol=args.symbol.upper(), exchange=args.exchange)
 
     from orion.orchestrator import analyze
@@ -133,7 +139,10 @@ def main(argv=None) -> int:
 
     p_an = sub.add_parser("analyze", help="Analyze a symbol")
     p_an.add_argument("symbol")
-    p_an.add_argument("--provider", default="sample", choices=["sample", "kite"])
+    p_an.add_argument("--provider", default="sample",
+                      choices=["sample", "kite", "snapshot"])
+    p_an.add_argument("--snapshot-file", default=None,
+                      help="Path to a JSON snapshot (for --provider snapshot)")
     p_an.add_argument("--exchange", default="NSE")
     p_an.add_argument("--order-qty", type=int, default=0,
                       help="Propose an order of this quantity (still requires confirmation)")

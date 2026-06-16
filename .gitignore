@@ -7,3 +7,4 @@ venv/
 .pytest_cache/
 orion/memory/decisions.jsonl
 .kite_session.json
+*.snapshot.json
