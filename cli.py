@@ -55,6 +55,14 @@ def _print_verdict(v: FinalVerdict) -> None:
     print(f"Entry         : {v.entry_considerations}")
     print(f"Exit          : {v.exit_considerations}")
     print(f"Rationale     : {v.rationale}")
+    if v.entry_price:
+        rpct = (v.risk_per_share / v.entry_price * 100) if v.entry_price else 0
+        print("\n--- Trade plan (long, ATR-based) ---")
+        print(f"  Entry      : ~{v.entry_price}")
+        print(f"  Stop-loss  : {v.stop_loss}   (risk {v.risk_per_share}/sh, -{rpct:.1f}%)")
+        print(f"  Target 1   : {v.target1}   (+{v.risk_per_share:.1f}, 1:1 R:R)")
+        print(f"  Target 2   : {v.target2}   (+{2*v.risk_per_share:.1f}, 1:2 R:R)")
+        print(f"  Target 3   : {v.target3}   (+{3*v.risk_per_share:.1f}, 1:3 R:R)")
     print("\n--- Module reports ---")
     for rep in v.module_reports:
         dim = f"[{rep.dimension}]" if rep.dimension else "[qualitative]"

@@ -114,6 +114,17 @@ class CIO:
         verdict_obj.suggested_quantity = qty
         verdict_obj.suggested_amount = amount
 
+        # Concrete trade levels (ATR-based long plan: stop 2xATR, targets 1:1/1:2/1:3).
+        price = ctx.ltp or ctx.technical.get("close")
+        atr = ctx.technical.get("atr_14")
+        if price and atr:
+            verdict_obj.entry_price = round(price, 2)
+            verdict_obj.stop_loss = round(price - 2 * atr, 2)
+            verdict_obj.risk_per_share = round(2 * atr, 2)
+            verdict_obj.target1 = round(price + 2 * atr, 2)
+            verdict_obj.target2 = round(price + 4 * atr, 2)
+            verdict_obj.target3 = round(price + 6 * atr, 2)
+
         # Optional LLM polish of the narrative (never changes the numbers).
         self._maybe_enrich(verdict_obj, llm)
         return verdict_obj

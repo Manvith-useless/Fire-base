@@ -124,6 +124,13 @@ class FinalVerdict:
     action_line: str = ""
     suggested_quantity: int = 0
     suggested_amount: float = 0.0
+    # Concrete trade levels (ATR-based long plan).
+    entry_price: float = 0.0
+    stop_loss: float = 0.0
+    target1: float = 0.0
+    target2: float = 0.0
+    target3: float = 0.0
+    risk_per_share: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -133,6 +140,9 @@ class FinalVerdict:
             "action_line": self.action_line,
             "suggested_quantity": self.suggested_quantity,
             "suggested_amount": round(self.suggested_amount, 2),
+            "entry_price": self.entry_price,
+            "stop_loss": self.stop_loss,
+            "targets": [self.target1, self.target2, self.target3],
             "confidence_score": round(self.confidence_score, 2),
             "conviction_score": round(self.conviction_score, 2),
             "thesis": self.thesis,
