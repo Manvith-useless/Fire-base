@@ -84,7 +84,11 @@ def cmd_analyze(args) -> int:
 
     from orion.orchestrator import analyze
 
-    verdict = analyze(provider, instrument, settings)
+    verdict = analyze(provider, instrument, settings,
+                      horizon=args.horizon, capital=args.capital)
+    mode = "SHORT-TERM (swing)" if args.horizon == "short" else "POSITION"
+    cap = f"₹{args.capital:,.0f}" if args.capital else "account balance"
+    print(f"\n[ Mode: {mode} | Capital: {cap} ]")
     _print_verdict(verdict)
 
     if args.order_qty:
@@ -154,6 +158,10 @@ def main(argv=None) -> int:
     p_an.add_argument("--snapshot-file", default=None,
                       help="Path to a JSON snapshot (for --provider snapshot)")
     p_an.add_argument("--exchange", default="NSE")
+    p_an.add_argument("--horizon", default="position", choices=["position", "short"],
+                      help="'short' = swing/momentum mode (tighter stop, momentum-weighted)")
+    p_an.add_argument("--capital", type=float, default=None,
+                      help="Model a specific bankroll for sizing, e.g. 5000")
     p_an.add_argument("--order-qty", type=int, default=0,
                       help="Propose an order of this quantity (still requires confirmation)")
     p_an.set_defaults(func=cmd_analyze)

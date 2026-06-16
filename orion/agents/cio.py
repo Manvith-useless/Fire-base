@@ -9,12 +9,12 @@ from __future__ import annotations
 from ..context import AnalysisContext
 from ..llm import LLM
 from ..schemas import (
-    SCORING_WEIGHTS,
     AgentReport,
     FinalVerdict,
     Recommendation,
     recommendation_from_score,
     score_label,
+    weights_for,
 )
 from .base import fmt
 
@@ -26,14 +26,19 @@ class CIO:
     name = "CIO / Decision"
 
     def decide(
-        self, ctx: AnalysisContext, reports: list[AgentReport], llm: LLM
+        self,
+        ctx: AnalysisContext,
+        reports: list[AgentReport],
+        llm: LLM,
+        horizon: str = "position",
     ) -> FinalVerdict:
         # ---- Weighted aggregation over present dimensions --------------------
+        weights = weights_for(horizon)
         dim_reports = {r.dimension: r for r in reports if r.dimension}
-        total_w = sum(SCORING_WEIGHTS[d] for d in dim_reports)
+        total_w = sum(weights[d] for d in dim_reports)
         if total_w > 0:
             weighted = sum(
-                SCORING_WEIGHTS[d] * rep.investment_score
+                weights[d] * rep.investment_score
                 for d, rep in dim_reports.items()
             ) / total_w
         else:
@@ -109,21 +114,24 @@ class CIO:
         )
 
         # Plain-language action call + concrete size for the user.
-        line, qty, amount = self._suggest_action(ctx, verdict, weighted)
+        line, qty, amount = self._suggest_action(ctx, verdict, weighted, horizon)
         verdict_obj.action_line = line
         verdict_obj.suggested_quantity = qty
         verdict_obj.suggested_amount = amount
 
-        # Concrete trade levels (ATR-based long plan: stop 2xATR, targets 1:1/1:2/1:3).
+        # Concrete trade levels. Short-term uses a tighter 1.5xATR stop (quicker,
+        # bigger reward:risk); position uses 2xATR. Targets ladder at 1:1/1:2/1:3.
         price = ctx.ltp or ctx.technical.get("close")
         atr = ctx.technical.get("atr_14")
         if price and atr:
+            stop_mult = 1.5 if horizon == "short" else 2.0
+            risk = stop_mult * atr
             verdict_obj.entry_price = round(price, 2)
-            verdict_obj.stop_loss = round(price - 2 * atr, 2)
-            verdict_obj.risk_per_share = round(2 * atr, 2)
-            verdict_obj.target1 = round(price + 2 * atr, 2)
-            verdict_obj.target2 = round(price + 4 * atr, 2)
-            verdict_obj.target3 = round(price + 6 * atr, 2)
+            verdict_obj.stop_loss = round(price - risk, 2)
+            verdict_obj.risk_per_share = round(risk, 2)
+            verdict_obj.target1 = round(price + risk, 2)
+            verdict_obj.target2 = round(price + 2 * risk, 2)
+            verdict_obj.target3 = round(price + 3 * risk, 2)
 
         # Optional LLM polish of the narrative (never changes the numbers).
         self._maybe_enrich(verdict_obj, llm)
@@ -134,7 +142,11 @@ class CIO:
     MAX_POSITION_FRACTION = 0.20
 
     def _suggest_action(
-        self, ctx: AnalysisContext, verdict: Recommendation, weighted: float
+        self,
+        ctx: AnalysisContext,
+        verdict: Recommendation,
+        weighted: float,
+        horizon: str = "position",
     ) -> tuple[str, int, float]:
         price = ctx.ltp or ctx.technical.get("close") or 0.0
         cash = ctx.available_cash
@@ -142,9 +154,13 @@ class CIO:
         max_affordable = int(cash // price) if price else 0
 
         if verdict == Recommendation.BUY:
-            # Scale exposure with score strength, capped.
-            strength = max(0.0, min(1.0, (weighted - 50) / 40))  # 50->0, 90->1
-            frac = self.MAX_POSITION_FRACTION * (0.5 + 0.5 * strength)
+            if horizon == "short":
+                # Focused swing: deploy most of the (small) capital into one name.
+                frac = 0.95
+            else:
+                # Scale exposure with score strength, capped.
+                strength = max(0.0, min(1.0, (weighted - 50) / 40))  # 50->0, 90->1
+                frac = self.MAX_POSITION_FRACTION * (0.5 + 0.5 * strength)
             qty = int((cash * frac) // price) if price else 0
             verb = "You should BUY" if weighted >= 85 else "You can BUY"
             if qty >= 1:

@@ -65,15 +65,21 @@ def analyze(
     instrument: Instrument,
     settings: Settings,
     persist: bool = True,
+    horizon: str = "position",
+    capital: float | None = None,
 ) -> FinalVerdict:
     llm = LLM(settings)
     ctx = build_context(provider, instrument)
+
+    # Let the user model a specific bankroll (e.g. a planned top-up).
+    if capital is not None:
+        ctx.margins = {"equity": {"available": {"live_balance": float(capital)}}}
 
     reports = []
     for agent in ANALYSIS_AGENTS:
         reports.extend(agent.run(ctx, llm))
 
-    verdict = CIO().decide(ctx, reports, llm)
+    verdict = CIO().decide(ctx, reports, llm, horizon=horizon)
     if persist:
         record_decision(verdict, provider.name)
     return verdict

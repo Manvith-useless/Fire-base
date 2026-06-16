@@ -32,6 +32,23 @@ SCORING_WEIGHTS: dict[str, float] = {
 
 assert abs(sum(SCORING_WEIGHTS.values()) - 1.0) < 1e-9, "weights must sum to 1.0"
 
+# Short-term / swing weighting: lean into momentum, catalysts and liquidity;
+# de-emphasize the long-term (200-DMA) regime so a strong bounce isn't vetoed.
+SHORT_TERM_WEIGHTS: dict[str, float] = {
+    "trend_momentum": 0.40,
+    "catalysts": 0.15,
+    "liquidity": 0.15,
+    "risk_volatility": 0.20,
+    "market_regime": 0.05,
+    "portfolio_fit": 0.05,
+}
+
+assert abs(sum(SHORT_TERM_WEIGHTS.values()) - 1.0) < 1e-9, "short weights must sum to 1.0"
+
+
+def weights_for(horizon: str) -> dict[str, float]:
+    return SHORT_TERM_WEIGHTS if horizon == "short" else SCORING_WEIGHTS
+
 
 def recommendation_from_score(score: float) -> Recommendation:
     """Map a 0-100 score to a recommendation per the spec's scale."""
